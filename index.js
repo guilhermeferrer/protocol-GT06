@@ -1,14 +1,38 @@
-const net = require('net');
-
+import net from 'net';
 const server = net.createServer();
+import express from 'express';
+import cors from 'cors';
+
+import './src/database';
+import GT06 from './src/app/protocols/gt06';
+import routes from './src/routes';
+import createTree from 'functional-red-black-tree';
+import Store from './src/app/lib/store';
+
+const clients = new Store(createTree());
+
+const api = express();
+
+api.use(express.json());
+api.use(cors());
+api.use(routes(clients));
 
 server.on('connection', (client) => {
-    console.log("SERVER %j", server.address());
-    console.log("New connection " + client.remoteAddress + ":" + client.remotePort);
-
+    const adapter = new GT06(client);
     client.on('data', (data) => {
-        console.log("New Message " + data);
-    })
+        adapter.receivedData(data);
+        if (!clients.get(adapter.getImei())) {
+            clients.add(adapter.getImei(), adapter);
+        }
+    });
+    client.on('close', (data) => {
+        clients.remove(adapter.getImei());
+        console.log(clients);
+        console.log('disconnected');
+    });
 });
 
-server.listen(process.env.PORT || 3000);
+api.listen(8080);
+server.listen(3333);
+
+//https://groups.google.com/forum/#!forum/traccar-pt-br
