@@ -2,26 +2,32 @@
 
 module.exports = {
   up: (queryInterface, Sequelize) => {
-    return queryInterface.createTable('sieges', {
+    return queryInterface.createTable('commands', {
       id: {
         type: Sequelize.INTEGER,
         primaryKey: true,
         autoIncrement: true,
         allowNull: false,
       },
-      siege: {
-        type: Sequelize.JSON,
-        allowNull: false,
+      identifier: {
+        type: Sequelize.STRING,
+        allowNull: false
       },
       imei: {
         type: Sequelize.STRING,
         allowNull: false,
-        references: {
-          model: 'last_positions',
-          key: 'imei'
-        },
-        onUpdate: 'CASCADE',
-        onDelete: 'CASCADE'
+      },
+      command: {
+        type: Sequelize.STRING,
+        allowNull: false,
+      },
+      status: {
+        type: Sequelize.STRING,
+        allowNull: false,
+      },
+      type: {
+        type: Sequelize.STRING,
+        allowNull: false,
       },
       created_at: {
         type: Sequelize.DATE,
@@ -35,6 +41,6 @@ module.exports = {
   },
 
   down: (queryInterface, Sequelize) => {
-    return queryInterface.dropTable('sieges');
+    return queryInterface.dropTable('commands');
   }
 };

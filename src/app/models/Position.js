@@ -10,7 +10,8 @@ class Position extends Model{
             imei: DataTypes.STRING,
             ignition: DataTypes.BOOLEAN,
             electricity: DataTypes.BOOLEAN,
-            anchor: DataTypes.BOOLEAN
+            anchor: DataTypes.BOOLEAN,
+            siege: DataTypes.BOOLEAN
         }, {
             sequelize
         });

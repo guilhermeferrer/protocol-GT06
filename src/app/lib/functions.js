@@ -9,7 +9,7 @@ export function bufferToHexString(buffer) {
 }
 
 export function hexToUtf8(hex) {
-    return Buffer.from(hex, 'hex').toString('uft-8');
+    return Buffer.from(hex, 'hex').toString('utf-8');
 }
 
 export function utf8ToHex(uft8) {

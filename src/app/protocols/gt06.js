@@ -1,17 +1,17 @@
 import { format, isAfter, addMinutes } from 'date-fns';
 import { isPointInPolygon } from 'geolib';
 
-import { hexToDecimal, bufferToHexString, decimalToHex, toBuffer, crc, utf8ToHex, hexToBinary } from '../lib/functions';
+import { hexToDecimal, bufferToHexString, decimalToHex, toBuffer, crc, utf8ToHex, hexToBinary, hexToUtf8 } from '../lib/functions';
 import Position from '../models/Position';
 import LastPosition from '../models/LastPosition';
 import Anchor from '../models/Anchor';
 import Event from '../models/Event';
+import Command from '../models/Command';
 
 export default class GT06 {
 
     startBit = [0x78, 0x78];
     stopBit = [0x0d, 0x0a];
-    serverFlag = [0x00, 0x00, 0x00, 0x00];
     DYD = toBuffer(utf8ToHex("DYD,000000#"));
     HFYD = toBuffer(utf8ToHex("HFYD,000000#"));
     anchor = false;
@@ -40,6 +40,9 @@ export default class GT06 {
             case 19:
                 console.log(`Protocol ${protocol} function heartBeat`);
                 return this.heartBeat(protocol);
+            case 21:
+                console.log(`Protocol ${protocol} function commandResponse`);
+                return this.commandResponse();
             case 22:
                 console.log(`Protocol ${protocol} function alarm`);
                 return this.alarm();
@@ -98,18 +101,32 @@ export default class GT06 {
         return this.client.write(this.createResponsePackage(content));
     }
 
-    cutOilAndElectricity() {
-        const content = [0x15, 0x80, 0x0f, ...this.serverFlag, ...this.DYD, 0x00, ...this.getSerialNumber()];
+    cutOilAndElectricity(identifier) {
+        const content = [0x15, 0x80, 0x0f, ...toBuffer(identifier), ...this.DYD, 0x00, ...this.getSerialNumber()];
         this.client.write(this.createResponsePackage(content));
 
         return "Enviado!";
     }
 
-    restoreOilAndElectricity() {
-        const content = [0x16, 0x80, 0x10, ...this.serverFlag, ...this.HFYD, 0x00, ...this.getSerialNumber()];
+    restoreOilAndElectricity(identifier) {
+        const content = [0x16, 0x80, 0x10, ...toBuffer(identifier), ...this.HFYD, 0x00, ...this.getSerialNumber()];
         this.client.write(this.createResponsePackage(content));
 
         return "Enviado!";
+    }
+
+    async commandResponse() {
+        const status = hexToUtf8(this.data.substring(18, this.data.length - 16));
+        const identifier = this.data.substr(10, 8);
+        const command = status.indexOf("DYD") != -1 ? 'cut': 'restore';
+
+        await Command.create({
+            imei: this.imei,
+            identifier,
+            status,
+            command,
+            type: 'response'
+        });
     }
 
     getSerialNumber() {

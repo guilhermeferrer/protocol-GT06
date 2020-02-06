@@ -9,7 +9,7 @@ class PositionController {
                 where: { imei },
                 limit: 15,
                 attributes: ['gps_date', 'latitude', 'longitude', 'velocity', 'ignition', 'electricity', 'anchor'],
-
+                order: [['created_at', 'desc']]
             }
         );
 

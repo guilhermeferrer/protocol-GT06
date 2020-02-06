@@ -2,14 +2,14 @@
 
 module.exports = {
   up: (queryInterface, Sequelize) => {
-    return queryInterface.createTable('sieges', {
+    return queryInterface.createTable('anchors', {
       id: {
         type: Sequelize.INTEGER,
         primaryKey: true,
         autoIncrement: true,
         allowNull: false,
       },
-      siege: {
+      point: {
         type: Sequelize.JSON,
         allowNull: false,
       },
@@ -35,6 +35,6 @@ module.exports = {
   },
 
   down: (queryInterface, Sequelize) => {
-    return queryInterface.dropTable('sieges');
+    return queryInterface.dropTable('anchors');
   }
 };

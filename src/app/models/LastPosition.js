@@ -13,7 +13,8 @@ class LastPosition extends Model{
             },
             ignition: DataTypes.BOOLEAN,
             electricity: DataTypes.BOOLEAN,
-            anchor: DataTypes.BOOLEAN
+            anchor: DataTypes.BOOLEAN,
+            siege: DataTypes.BOOLEAN
         }, {
             sequelize
         });
@@ -21,6 +22,7 @@ class LastPosition extends Model{
     
     static associate(models){
         this.hasOne(models.Anchor, { foreignKey: 'imei', as: 'anchoring' });
+        this.hasOne(models.Siege, { foreignKey: 'imei', as: 'sieging' });
     }
 }
 

@@ -34,6 +34,10 @@ module.exports = {
         type: Sequelize.BOOLEAN,
         defaultValue: false
       },
+      siege: {
+        type: Sequelize.BOOLEAN,
+        defaultValue: false
+      },
       created_at: {
         type: Sequelize.DATE,
         allowNull: false,

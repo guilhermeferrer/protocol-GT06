@@ -8,15 +8,21 @@ class LastPositionController {
             {
                 where: { imei },
                 attributes: ['gps_date', 'latitude', 'longitude', 'velocity', 'ignition', 'electricity', 'anchor'],
-                include: {
-                    association: 'anchoring',
-                    attributes: ['anchor']
-                }
+                include: [
+                    {
+                        association: 'anchoring',
+                        attributes: ['point']
+                    },
+                    {
+                        association: 'sieging',
+                        attributes: ['siege']
+                    },
+                ]
             }
         );
 
         if (!lastPosition) {
-            return res.status(400).json({ error: "Imei não encontrado!" });
+            return res.status(404).json({ error: "Imei não encontrado!" });
         }
 
         return res.json(lastPosition);

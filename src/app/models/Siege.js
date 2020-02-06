@@ -1,9 +1,9 @@
 import { Model, DataTypes } from 'sequelize';
 
-class Anchor extends Model{
+class Siege extends Model{
     static init(sequelize){
         super.init({
-            point: DataTypes.JSON,
+            siege: DataTypes.JSON,
             imei: DataTypes.STRING
         }, {
             sequelize
@@ -15,4 +15,4 @@ class Anchor extends Model{
     }
 }
 
-export default Anchor;
+export default Siege;
