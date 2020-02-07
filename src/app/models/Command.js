@@ -3,11 +3,16 @@ import { Model, DataTypes } from 'sequelize';
 class Command extends Model{
     static init(sequelize){
         super.init({
+            id: {
+                type: DataTypes.STRING,
+                primaryKey: true
+            },
             imei: DataTypes.STRING,
-            identifier: DataTypes.STRING,
             command: DataTypes.STRING,
-            type: DataTypes.STRING,
-            status: DataTypes.STRING
+            status: {
+                type: DataTypes.STRING,
+                defaultValue: "Sem resposta"
+            }
         }, {
             sequelize
         });

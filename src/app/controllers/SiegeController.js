@@ -1,18 +1,18 @@
 import LastPosition from '../models/LastPosition';
-import Anchor from '../models/Anchor';
+import Siege from '../models/Siege';
 
 class SiegeController {
     async create(req, res) {
-        const { anchor, imei } = req.body;
+        const { siege, imei } = req.body;
 
-        const updateAnchor = await Anchor.update({
-            anchor
+        const updateAnchor = await Siege.update({
+            siege
         }, {
             where: { imei }
         });
 
         if (updateAnchor[0] === 0) {
-            const newAnchor = await Anchor.create({ anchor, imei });
+            const newAnchor = await Siege.create({ siege, imei });
 
             return res.json({ message: "Cerco criado com sucesso!" });
         }
@@ -23,7 +23,7 @@ class SiegeController {
     async update(req, res) {
         const { imei, activated } = req.body;
 
-        await LastPosition.update({ anchor: activated }, { where: { imei } });
+        await LastPosition.update({ siege: activated }, { where: { imei } });
 
         return res.json({ message: `Cerco ${activated ? "ativado" : "desativado"} com sucesso!` });
     }

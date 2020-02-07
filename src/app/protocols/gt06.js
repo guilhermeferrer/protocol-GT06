@@ -1,5 +1,5 @@
 import { format, isAfter, addMinutes } from 'date-fns';
-import { isPointInPolygon } from 'geolib';
+import { isPointInPolygon, isPointWithinRadius } from 'geolib';
 
 import { hexToDecimal, bufferToHexString, decimalToHex, toBuffer, crc, utf8ToHex, hexToBinary, hexToUtf8 } from '../lib/functions';
 import Position from '../models/Position';
@@ -7,6 +7,7 @@ import LastPosition from '../models/LastPosition';
 import Anchor from '../models/Anchor';
 import Event from '../models/Event';
 import Command from '../models/Command';
+import Siege from '../models/Siege';
 
 export default class GT06 {
 
@@ -15,6 +16,7 @@ export default class GT06 {
     DYD = toBuffer(utf8ToHex("DYD,000000#"));
     HFYD = toBuffer(utf8ToHex("HFYD,000000#"));
     anchor = false;
+    siege = false;
 
     constructor(client) {
         this.client = client;
@@ -57,18 +59,18 @@ export default class GT06 {
     }
 
     async report() {
-
         const position = {
             imei: this.imei,
             ...this.getCoordinates(),
             gps_date: this.getDate(),
             ignition: this.ignition,
             electricity: this.electricity,
-            anchor: this.anchor
+            anchor: this.anchor,
+            siege: this.siege
         };
 
         if (isAfter(new Date(), this.verifyAnchor)) {
-            this.isAnchored(position);
+            this.checkGeoFences(position);
         }
 
         await Position.create(position);
@@ -117,16 +119,12 @@ export default class GT06 {
 
     async commandResponse() {
         const status = hexToUtf8(this.data.substring(18, this.data.length - 16));
-        const identifier = this.data.substr(10, 8);
-        const command = status.indexOf("DYD") != -1 ? 'cut': 'restore';
+        const id = this.data.substr(10, 8);
 
-        await Command.create({
-            imei: this.imei,
-            identifier,
-            status,
-            command,
-            type: 'response'
-        });
+        await Command.update(
+            { status },
+            { where: { id } }
+        );
     }
 
     getSerialNumber() {
@@ -161,27 +159,49 @@ export default class GT06 {
         return formattedDate;
     }
 
-    async isAnchored(position) {
-        const lastPosition = await LastPosition.findOne({ where: { imei: this.imei }, attributes: ['anchor'] });
+    async checkGeoFences(position) {
+        this.verifyAnchor = addMinutes(new Date(), 1);        
+        console.log(this.verifyAnchor);
 
-        if (lastPosition && lastPosition.anchor) {
-            this.anchor = true;
-            this.verifyAnchor = addMinutes(new Date(), 1);
-            console.log(this.verifyAnchor);
-            this.anchorEvent(position);
-        }
+        const { anchor, siege, ...lastPosition } = await LastPosition.findOne({ where: { imei: this.imei }, attributes: ['anchor', 'siege'] });
+        
+        if(!lastPosition) return;
+
+        if (anchor) this.checkAnchor(position);
+        if (siege) this.checkSiege(position);
     }
 
-    async anchorEvent(position) {
-        const { anchor } = await Anchor.findOne({ where: { imei: this.imei } });
+    async checkSiege(position) {
+        const { siege } = await Siege.findOne({ where: { imei: this.imei } });
 
-        if (!isPointInPolygon(position, anchor)) {
+        if (!isPointInPolygon(position, siege)) {
+            await Event.create({
+                imei: this.imei,
+                type: "Cerco"
+            });
+        } else {
+            console.log("!Cerco");
+        }
+
+        this.siege = true;
+    }
+
+    async checkAnchor({ latitude, longitude }) {
+        const { point } = await Anchor.findOne({ where: { imei: this.imei } });
+
+        console.log(point);
+        const position = [ latitude, longitude ];
+
+        if (!isPointWithinRadius(position, point, 20)) {
             await Event.create({
                 imei: this.imei,
                 type: "Âncoragem"
             });
+        } else {
+            console.log("!Âncoragem");
         }
 
+        this.anchor = true;
     }
 
     getCoordinates() {

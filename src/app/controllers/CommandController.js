@@ -8,24 +8,22 @@ class CommandController {
         const { clients } = req;
         const client = clients.get(imei);
 
-        const identifier = crc(Math.random() * 100) + crc(new Date());
-
-        const response = await Command.create({
-            imei,
-            command,
-            identifier,
-            type: 'request',
-            status: 'Comando enviado'
-        });
-
         if (!client) {
             return res.status(400).json({ error: "O equipamento informado não está comunicando com o servidor no momento" });
         }
 
+        const id = crc(Math.random() * 100) + crc(new Date());
+
+        const response = await Command.create({
+            id,
+            imei,
+            command
+        });
+
         if (command === 'cut') {
-            return res.json({ message: client.cutOilAndElectricity(identifier) });
+            return res.json({ message: client.cutOilAndElectricity(id) });
         } else if (command === 'restore') {
-            return res.json({ message: client.restoreOilAndElectricity(identifier) });
+            return res.json({ message: client.restoreOilAndElectricity(id) });
         }
 
         return res.status(400).json({ error: "Comando inválido!" });

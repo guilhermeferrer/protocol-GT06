@@ -7,7 +7,7 @@ class LastPositionController {
         const lastPosition = await LastPosition.findOne(
             {
                 where: { imei },
-                attributes: ['gps_date', 'latitude', 'longitude', 'velocity', 'ignition', 'electricity', 'anchor'],
+                attributes: ['gps_date', 'latitude', 'longitude', 'velocity', 'ignition', 'electricity', 'anchor', 'siege'],
                 include: [
                     {
                         association: 'anchoring',
