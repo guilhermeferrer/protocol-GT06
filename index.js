@@ -3,7 +3,7 @@ const server = net.createServer();
 import express from 'express';
 import cors from 'cors';
 
-import './src/database';
+import './src/database/mongoose';
 import GT06 from './src/app/protocols/gt06';
 import routes from './src/routes';
 import createTree from 'functional-red-black-tree';
@@ -27,12 +27,9 @@ server.on('connection', (client) => {
     });
     client.on('close', (data) => {
         clients.remove(adapter.getImei());
-        console.log(clients);
         console.log('disconnected');
     });
 });
 
-api.listen(8080);
+api.listen(8081);
 server.listen(3333);
-
-//https://groups.google.com/forum/#!forum/traccar-pt-br

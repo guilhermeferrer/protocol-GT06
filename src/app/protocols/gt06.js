@@ -1,4 +1,4 @@
-import { format, isAfter, addMinutes } from 'date-fns';
+import { format, isAfter, addMinutes, isWithinInterval, parseISO } from 'date-fns';
 import { isPointInPolygon, isPointWithinRadius } from 'geolib';
 
 import { hexToDecimal, bufferToHexString, decimalToHex, toBuffer, crc, utf8ToHex, hexToBinary, hexToUtf8 } from '../lib/functions';
@@ -7,7 +7,6 @@ import LastPosition from '../models/LastPosition';
 import Anchor from '../models/Anchor';
 import Event from '../models/Event';
 import Command from '../models/Command';
-import Siege from '../models/Siege';
 
 export default class GT06 {
 
@@ -48,6 +47,8 @@ export default class GT06 {
             case 22:
                 console.log(`Protocol ${protocol} function alarm`);
                 return this.alarm();
+            default:
+                console.log(`Protocolo não identificado ${protocol}`);
         }
     }
 
@@ -59,6 +60,7 @@ export default class GT06 {
     }
 
     async report() {
+
         const position = {
             imei: this.imei,
             ...this.getCoordinates(),
@@ -69,18 +71,113 @@ export default class GT06 {
             siege: this.siege
         };
 
+        this.checkEvents(position);
+
         if (isAfter(new Date(), this.verifyAnchor)) {
             this.checkGeoFences(position);
         }
 
-        await Position.create(position);
+        if (this.ignition && this.electricity)
+            await Position(this.imei).create(position);
+        const { nModified } = await LastPosition.updateOne({ imei: this.imei }, position);
+        if (nModified === 0)
+            await LastPosition.create(position);
+    }
+
+    async checkEvents(position) {
+        const { events_config } = await LastPosition.findOne({ imei: this.imei });
+
+        const { siege } = events_config;
+
+        if (siege) {
+            if (this.defaultConfigs(siege))
+                this.checkSiege();
+        }
+
+
+    }
+
+    async defaultConfigs(type, config) {
+        const { active, initial_date, final_date, initial_time, final_time, suspend_till, schedule, once_a_day } = config;
+        const today = new Date();
+
+        if (!active) {
+            console.log("Evento desativado!");
+            return false;
+        }
+
+        if (!isWithinInterval(today, {
+            start: parseISO(initial_date),
+            end: parseISO(final_date)
+        })) {
+            console.log("Evento vencido!");
+            return false;
+        }
+
+        const setTime = (time) => {
+            const [hours, minutes] = time.split(":");
+            const today = new Date();
+
+            today.setHours(hours);
+            today.setMinutes(minutes);
+
+            return today;
+        };
+
+        if (!isWithinInterval(
+            today,
+            {
+                start: setTime(initial_time),
+                end: setTime(final_time)
+            }
+        )) {
+            console.log("Evento fora do horário de funcionamento!");
+            return false;
+        }
+
+        if (suspend_till && isAfter(parseISO(suspend_till), today)) {
+            console.log("Evento suspenso!");
+            return false;
+        }
+
+        if (schedule && !schedule.includes(format(new Date(), 'iiii'))) {
+            console.log("Dia de funcionamento inválido!");
+            return false;
+        }
+
+        if (once_a_day) {
+            const start = new Date();
+            start.setHours(0, 0, 0, 0);
+
+            const end = new Date();
+            end.setHours(23, 59, 59, 999);
+            const event = await Event.findOne({ imei: this.imei, type, createdAt: { $gte: start, $lt: end } });
+
+            if (event) {
+                console.log("Evento do dia já foi gerado");
+                return false;
+            };
+        }
+
+        return true;
     }
 
     async alarm() {
+        const { events_config } = await LastPosition.findOne({ imei: this.imei });
+
+        const { battery } = events_config;
+
+        if (!battery) return console.log("Falha de bateria não configurada");
+
+        // if (!this.defaultConfigs('battery', battery)) return;
+        console.log(!this.defaultConfigs('battery', battery));
+
         await Event.create({
             imei: this.imei,
-            type: "Falha de Bateria"
+            type: "battery"
         });
+        
+        console.log("Evento gerado");
     }
 
     async heartBeat(protocol) {
@@ -90,13 +187,11 @@ export default class GT06 {
         this.electricity = status[0] === '0' ? true : false;
         this.ignition = status[6] === '0' ? false : true;
         console.log(status);
-        await LastPosition.update(
+        await LastPosition.updateOne(
+            { imei: this.imei },
             {
                 ignition: this.ignition,
                 electricity: this.electricity
-            },
-            {
-                where: { imei: this.imei }
             }
         );
 
@@ -119,11 +214,11 @@ export default class GT06 {
 
     async commandResponse() {
         const status = hexToUtf8(this.data.substring(18, this.data.length - 16));
-        const id = this.data.substr(10, 8);
+        const _id = this.data.substr(10, 8);
 
-        await Command.update(
+        await Command.updateOne(
+            { _id },
             { status },
-            { where: { id } }
         );
     }
 
@@ -153,22 +248,21 @@ export default class GT06 {
 
         const parsedDate = new Date(date.year, date.month, date.day, date.hours, date.minutes, date.seconds);
 
-        const formattedDate = format(parsedDate, "dd'/'MM'/'yyyy HH':'mm':'ss");
-        console.log(formattedDate);
+        console.log(parsedDate);
 
-        return formattedDate;
+        return parsedDate;
     }
 
     async checkGeoFences(position) {
-        this.verifyAnchor = addMinutes(new Date(), 1);        
-        console.log(this.verifyAnchor);
+        this.verifyAnchor = addMinutes(new Date(), 1);
+        //console.log(this.verifyAnchor);
 
-        const { anchor, siege, ...lastPosition } = await LastPosition.findOne({ where: { imei: this.imei }, attributes: ['anchor', 'siege'] });
-        
-        if(!lastPosition) return;
+        // const { anchor, siege, ...lastPosition } = await LastPosition.findOne({ imei: this.imei }).select('anchor siege');
 
-        if (anchor) this.checkAnchor(position);
-        if (siege) this.checkSiege(position);
+        // if (!lastPosition) return;
+
+        // if (anchor) this.checkAnchor(position);
+        // if (siege) this.checkSiege(position);
     }
 
     async checkSiege(position) {
@@ -187,10 +281,10 @@ export default class GT06 {
     }
 
     async checkAnchor({ latitude, longitude }) {
-        const { point } = await Anchor.findOne({ where: { imei: this.imei } });
+        const { point } = await Anchor.findOne({ imei: this.imei });
 
         console.log(point);
-        const position = [ latitude, longitude ];
+        const position = [latitude, longitude];
 
         if (!isPointWithinRadius(position, point, 20)) {
             await Event.create({

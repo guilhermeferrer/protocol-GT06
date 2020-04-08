@@ -1,5 +1,4 @@
 import LastPosition from '../models/LastPosition';
-import Siege from '../models/Siege';
 
 class SiegeController {
     async create(req, res) {

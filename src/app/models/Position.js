@@ -1,21 +1,40 @@
-import { Model, DataTypes } from 'sequelize';
+import { model, Schema } from 'mongoose';
 
-class Position extends Model{
-    static init(sequelize){
-        super.init({
-            latitude: DataTypes.STRING,
-            longitude: DataTypes.STRING,
-            velocity: DataTypes.DECIMAL,
-            gps_date: DataTypes.STRING,
-            imei: DataTypes.STRING,
-            ignition: DataTypes.BOOLEAN,
-            electricity: DataTypes.BOOLEAN,
-            anchor: DataTypes.BOOLEAN,
-            siege: DataTypes.BOOLEAN
-        }, {
-            sequelize
-        });
-    }    
-}
+const Position = new Schema({
+    latitude: {
+        type: String,
+        required: true
+    },
+    longitude: {
+        type: String,
+        required: true
+    },
+    velocity: {
+        type: Number,
+        required: true
+    },
+    gps_date: {
+        type: Date,
+        required: true
+    },
+    imei: {
+        type: String,
+        required: true
+    },
+    ignition: {
+        type: Boolean,
+        required: true
+    },
+    electricity: {
+        type: Boolean,
+        required: true
+    },
+    anchor: {
+        type: Boolean,
+        required: true
+    }
+}, {
+    timestamps: true
+});
 
-export default Position;
+export default (imei) => model(`position_${imei}`, Position);

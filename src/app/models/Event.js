@@ -1,14 +1,16 @@
-import { Model, DataTypes } from 'sequelize';
+import { model, Schema } from 'mongoose';
 
-class Event extends Model{
-    static init(sequelize){
-        super.init({
-            imei: DataTypes.STRING,
-            type: DataTypes.STRING
-        }, {
-            sequelize
-        });
-    }
-}
+const Event = new Schema({
+    imei: {
+        type: String,
+        required: true
+    },
+    type: {
+        type: String,
+        required: true
+    },
+}, {
+    timestamps: true
+});
 
-export default Event;
+export default model('event', Event);

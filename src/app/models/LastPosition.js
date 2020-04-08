@@ -1,29 +1,51 @@
-import { Model, DataTypes } from 'sequelize';
+import { model, Schema } from 'mongoose';
 
-class LastPosition extends Model{
-    static init(sequelize){
-        super.init({
-            latitude: DataTypes.STRING,
-            longitude: DataTypes.STRING,
-            velocity: DataTypes.DECIMAL,
-            gps_date: DataTypes.STRING,
-            imei: {
-                type: DataTypes.STRING,
-                primaryKey: true
-            },
-            ignition: DataTypes.BOOLEAN,
-            electricity: DataTypes.BOOLEAN,
-            anchor: DataTypes.BOOLEAN,
-            siege: DataTypes.BOOLEAN
-        }, {
-            sequelize
-        });
-    }    
-    
-    static associate(models){
-        this.hasOne(models.Anchor, { foreignKey: 'imei', as: 'anchoring' });
-        this.hasOne(models.Siege, { foreignKey: 'imei', as: 'sieging' });
+const LastPosition = new Schema({
+    imei: {
+        type: String,
+        unique: true,
+        required: true
+    },
+    entity: {
+        type: String,
+    },
+    organization: {
+        type: String,
+    },
+    latitude: {
+        type: String,
+        required: true
+    },
+    longitude: {
+        type: String,
+        required: true
+    },
+    velocity: {
+        type: Number,
+        required: true
+    },
+    gps_date: {
+        type: Date,
+        required: true
+    },
+    ignition: {
+        type: Boolean,
+        required: true
+    },
+    electricity: {
+        type: Boolean,
+        required: true
+    },
+    anchor: {
+        type: Boolean,
+        required: true
+    },
+    events_config: {
+        type: JSON,
+        default: {}
     }
-}
+}, {
+    timestamps: true
+})
 
-export default LastPosition;
+export default model('last-position', LastPosition);

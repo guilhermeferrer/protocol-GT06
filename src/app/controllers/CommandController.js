@@ -12,10 +12,10 @@ class CommandController {
             return res.status(400).json({ error: "O equipamento informado não está comunicando com o servidor no momento" });
         }
 
-        const id = crc(Math.random() * 100) + crc(new Date());
+        const _id = crc(Math.random() * 100) + crc(new Date());
 
         const response = await Command.create({
-            id,
+            _id,
             imei,
             command
         });

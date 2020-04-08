@@ -14,9 +14,8 @@ export default (clients) => {
         next();
     }, CommandController.update);
     routes.get('/last-position', LastPositionController.show);
+    routes.post('/event/configs', LastPositionController.update);
     routes.post('/positions', PositionController.index);
-    routes.post('/create-siege', SiegeController.create);
-    routes.post('/activate-siege', SiegeController.update);
     routes.post('/anchor', AnchorController.create);
 
     return routes;

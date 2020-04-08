@@ -1,22 +1,22 @@
-import { Model, DataTypes } from 'sequelize';
+import { model, Schema } from 'mongoose';
 
-class Command extends Model{
-    static init(sequelize){
-        super.init({
-            id: {
-                type: DataTypes.STRING,
-                primaryKey: true
-            },
-            imei: DataTypes.STRING,
-            command: DataTypes.STRING,
-            status: {
-                type: DataTypes.STRING,
-                defaultValue: "Sem resposta"
-            }
-        }, {
-            sequelize
-        });
+const Command = new Schema({
+    imei: {
+        type: String,
+        required: true
+    },
+    command: {
+        type: String,
+        required: true
+    },
+    status: {
+        type: String,
+        default: "sem resposta"
+    },
+},
+    {
+        timestamps: true
     }
-}
+);
 
-export default Command;
+export default model('command', Command);

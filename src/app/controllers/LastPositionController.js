@@ -27,6 +27,14 @@ class LastPositionController {
 
         return res.json(lastPosition);
     }
+
+    async update(req, res){
+        const { battery, imei } = req.body;
+
+        const lastPosition = await LastPosition.updateOne({ imei }, { events_config: { battery } });
+
+        return res.json(lastPosition);
+    }
 }
 
 export default new LastPositionController();

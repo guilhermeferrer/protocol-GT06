@@ -1,18 +1,16 @@
-import { Model, DataTypes } from 'sequelize';
+import { model, Schema } from 'mongoose';
 
-class Anchor extends Model{
-    static init(sequelize){
-        super.init({
-            point: DataTypes.JSON,
-            imei: DataTypes.STRING
-        }, {
-            sequelize
-        });
+const Anchor = new Schema({
+    point: {
+        type: JSON,
+        required: true
+    },
+    imei: {
+        type: String,
+        required: true
     }
+}, {
+    timestamps: true
+});
 
-    static associate(models){
-        this.belongsTo(models.LastPosition, { foreignKey: 'imei' });
-    }
-}
-
-export default Anchor;
+export default model('anchor', Anchor);
