@@ -1,12 +1,9 @@
-import { format, isAfter, addMinutes, isWithinInterval, parseISO } from 'date-fns';
-import { isPointInPolygon, isPointWithinRadius } from 'geolib';
-
 import { hexToDecimal, bufferToHexString, decimalToHex, toBuffer, crc, utf8ToHex, hexToBinary, hexToUtf8 } from '../lib/functions';
 import Position from '../models/Position';
 import LastPosition from '../models/LastPosition';
-import Anchor from '../models/Anchor';
-import Event from '../models/Event';
 import Command from '../models/Command';
+
+import Events from '../lib/Events';
 
 export default class GT06 {
 
@@ -14,8 +11,6 @@ export default class GT06 {
     stopBit = [0x0d, 0x0a];
     DYD = toBuffer(utf8ToHex("DYD,000000#"));
     HFYD = toBuffer(utf8ToHex("HFYD,000000#"));
-    anchor = false;
-    siege = false;
 
     constructor(client) {
         this.client = client;
@@ -60,7 +55,6 @@ export default class GT06 {
     }
 
     async report() {
-
         const position = {
             imei: this.imei,
             ...this.getCoordinates(),
@@ -71,113 +65,18 @@ export default class GT06 {
             siege: this.siege
         };
 
-        this.checkEvents(position);
 
-        if (isAfter(new Date(), this.verifyAnchor)) {
-            this.checkGeoFences(position);
-        }
-
-        if (this.ignition && this.electricity)
+        if (this.ignition !== undefined && this.electricity !== undefined) {
+            await Events.checkEvents(position, this.imei);
             await Position(this.imei).create(position);
-        const { nModified } = await LastPosition.updateOne({ imei: this.imei }, position);
-        if (nModified === 0)
-            await LastPosition.create(position);
-    }
-
-    async checkEvents(position) {
-        const { events_config } = await LastPosition.findOne({ imei: this.imei });
-
-        const { siege } = events_config;
-
-        if (siege) {
-            if (this.defaultConfigs(siege))
-                this.checkSiege();
+            const { nModified } = await LastPosition.updateOne({ imei: this.imei }, position);
+            if (nModified === 0)
+                await LastPosition.create(position);
         }
-
-
-    }
-
-    async defaultConfigs(type, config) {
-        const { active, initial_date, final_date, initial_time, final_time, suspend_till, schedule, once_a_day } = config;
-        const today = new Date();
-
-        if (!active) {
-            console.log("Evento desativado!");
-            return false;
-        }
-
-        if (!isWithinInterval(today, {
-            start: parseISO(initial_date),
-            end: parseISO(final_date)
-        })) {
-            console.log("Evento vencido!");
-            return false;
-        }
-
-        const setTime = (time) => {
-            const [hours, minutes] = time.split(":");
-            const today = new Date();
-
-            today.setHours(hours);
-            today.setMinutes(minutes);
-
-            return today;
-        };
-
-        if (!isWithinInterval(
-            today,
-            {
-                start: setTime(initial_time),
-                end: setTime(final_time)
-            }
-        )) {
-            console.log("Evento fora do horário de funcionamento!");
-            return false;
-        }
-
-        if (suspend_till && isAfter(parseISO(suspend_till), today)) {
-            console.log("Evento suspenso!");
-            return false;
-        }
-
-        if (schedule && !schedule.includes(format(new Date(), 'iiii'))) {
-            console.log("Dia de funcionamento inválido!");
-            return false;
-        }
-
-        if (once_a_day) {
-            const start = new Date();
-            start.setHours(0, 0, 0, 0);
-
-            const end = new Date();
-            end.setHours(23, 59, 59, 999);
-            const event = await Event.findOne({ imei: this.imei, type, createdAt: { $gte: start, $lt: end } });
-
-            if (event) {
-                console.log("Evento do dia já foi gerado");
-                return false;
-            };
-        }
-
-        return true;
     }
 
     async alarm() {
-        const { events_config } = await LastPosition.findOne({ imei: this.imei });
-
-        const { battery } = events_config;
-
-        if (!battery) return console.log("Falha de bateria não configurada");
-
-        // if (!this.defaultConfigs('battery', battery)) return;
-        console.log(!this.defaultConfigs('battery', battery));
-
-        await Event.create({
-            imei: this.imei,
-            type: "battery"
-        });
-        
-        console.log("Evento gerado");
+        Events.batteryFailure(this.imei);
     }
 
     async heartBeat(protocol) {
@@ -187,13 +86,6 @@ export default class GT06 {
         this.electricity = status[0] === '0' ? true : false;
         this.ignition = status[6] === '0' ? false : true;
         console.log(status);
-        await LastPosition.updateOne(
-            { imei: this.imei },
-            {
-                ignition: this.ignition,
-                electricity: this.electricity
-            }
-        );
 
         return this.client.write(this.createResponsePackage(content));
     }
@@ -251,51 +143,6 @@ export default class GT06 {
         console.log(parsedDate);
 
         return parsedDate;
-    }
-
-    async checkGeoFences(position) {
-        this.verifyAnchor = addMinutes(new Date(), 1);
-        //console.log(this.verifyAnchor);
-
-        // const { anchor, siege, ...lastPosition } = await LastPosition.findOne({ imei: this.imei }).select('anchor siege');
-
-        // if (!lastPosition) return;
-
-        // if (anchor) this.checkAnchor(position);
-        // if (siege) this.checkSiege(position);
-    }
-
-    async checkSiege(position) {
-        const { siege } = await Siege.findOne({ where: { imei: this.imei } });
-
-        if (!isPointInPolygon(position, siege)) {
-            await Event.create({
-                imei: this.imei,
-                type: "Cerco"
-            });
-        } else {
-            console.log("!Cerco");
-        }
-
-        this.siege = true;
-    }
-
-    async checkAnchor({ latitude, longitude }) {
-        const { point } = await Anchor.findOne({ imei: this.imei });
-
-        console.log(point);
-        const position = [latitude, longitude];
-
-        if (!isPointWithinRadius(position, point, 20)) {
-            await Event.create({
-                imei: this.imei,
-                type: "Âncoragem"
-            });
-        } else {
-            console.log("!Âncoragem");
-        }
-
-        this.anchor = true;
     }
 
     getCoordinates() {

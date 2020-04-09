@@ -36,10 +36,6 @@ const LastPosition = new Schema({
         type: Boolean,
         required: true
     },
-    anchor: {
-        type: Boolean,
-        required: true
-    },
     events_config: {
         type: JSON,
         default: {}

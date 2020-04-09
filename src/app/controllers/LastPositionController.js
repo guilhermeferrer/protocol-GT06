@@ -29,9 +29,9 @@ class LastPositionController {
     }
 
     async update(req, res){
-        const { battery, imei } = req.body;
+        const { events_config, imei } = req.body;
 
-        const lastPosition = await LastPosition.updateOne({ imei }, { events_config: { battery } });
+        const lastPosition = await LastPosition.updateOne({ imei }, { events_config });
 
         return res.json(lastPosition);
     }

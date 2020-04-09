@@ -1,6 +1,6 @@
 import { Router } from 'express';
 
-import AnchorController from './app/controllers/AnchorController';
+// import AnchorController from './app/controllers/AnchorController';
 import LastPositionController from './app/controllers/LastPositionController';
 import PositionController from './app/controllers/PositionController';
 import SiegeController from './app/controllers/SiegeController';
@@ -16,7 +16,7 @@ export default (clients) => {
     routes.get('/last-position', LastPositionController.show);
     routes.post('/event/configs', LastPositionController.update);
     routes.post('/positions', PositionController.index);
-    routes.post('/anchor', AnchorController.create);
+    // routes.post('/anchor', AnchorController.create);
 
     return routes;
 }

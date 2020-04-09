@@ -28,10 +28,6 @@ const Position = new Schema({
     electricity: {
         type: Boolean,
         required: true
-    },
-    anchor: {
-        type: Boolean,
-        required: true
     }
 }, {
     timestamps: true
