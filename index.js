@@ -8,6 +8,7 @@ import GT06 from './src/app/protocols/gt06';
 import routes from './src/routes';
 import createTree from 'functional-red-black-tree';
 import Store from './src/app/lib/store';
+import amqp from 'amqplib/callback_api';
 
 const clients = new Store(createTree());
 
@@ -17,19 +18,29 @@ api.use(express.json());
 api.use(cors());
 api.use(routes(clients));
 
-server.on('connection', (client) => {
-    const adapter = new GT06(client);
-    client.on('data', (data) => {
-        adapter.receivedData(data);
-        if (!clients.get(adapter.getImei())) {
-            clients.add(adapter.getImei(), adapter);
-        }
-    });
-    client.on('close', (data) => {
-        clients.remove(adapter.getImei());
-        console.log('disconnected');
+amqp.connect('amqp://localhost:5672', (error, conn) => {
+    if (error) console.log(error);
+    conn.createChannel((error, ch) => {
+        if (error) console.log(error);
+        
+        server.on('connection', (client) => {
+            const adapter = new GT06(client, ch);
+            client.on('data', (data) => {
+                adapter.receivedData(data);
+                if (!clients.get(adapter.getImei())) {
+                    clients.add(adapter.getImei(), adapter);
+                }
+            });
+            client.on('close', (data) => {
+                clients.remove(adapter.getImei());
+                console.log('disconnected');
+            });
+        });
+
     });
 });
+
+
 
 api.listen(8081);
 server.listen(3333);

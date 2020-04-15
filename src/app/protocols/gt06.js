@@ -1,6 +1,4 @@
 import { hexToDecimal, bufferToHexString, decimalToHex, toBuffer, crc, utf8ToHex, hexToBinary, hexToUtf8 } from '../lib/functions';
-import Position from '../models/Position';
-import LastPosition from '../models/LastPosition';
 import Command from '../models/Command';
 
 import Events from '../lib/Events';
@@ -12,8 +10,9 @@ export default class GT06 {
     DYD = toBuffer(utf8ToHex("DYD,000000#"));
     HFYD = toBuffer(utf8ToHex("HFYD,000000#"));
 
-    constructor(client) {
+    constructor(client, queue) {
         this.client = client;
+        this.queue = queue;
     }
 
     receivedData(data) {
@@ -60,19 +59,13 @@ export default class GT06 {
             ...this.getCoordinates(),
             gps_date: this.getDate(),
             ignition: this.ignition,
-            electricity: this.electricity,
-            anchor: this.anchor,
-            siege: this.siege
+            electricity: this.electricity
         };
 
+        if (this.ignition === undefined || this.electricity === undefined) return;
 
-        if (this.ignition !== undefined && this.electricity !== undefined) {
-            await Events.checkEvents(position, this.imei);
-            await Position(this.imei).create(position);
-            const { nModified } = await LastPosition.updateOne({ imei: this.imei }, position);
-            if (nModified === 0)
-                await LastPosition.create(position);
-        }
+        this.queue.sendToQueue('positions', Buffer.from(JSON.stringify(position)));
+        console.log("posição enviada");
     }
 
     async alarm() {
@@ -148,6 +141,8 @@ export default class GT06 {
     getCoordinates() {
         const byte1 = hexToBinary(hexToDecimal(this.data.substring(40, 42)));
         const byte2 = hexToBinary(hexToDecimal(this.data.substring(40, 42)));
+
+        console.log(`${byte1} - ${byte2}`);
 
         const latitude = (byte1[3] == 1 ? -1 : 1) * parseInt(this.data.substring(22, 30), 16) / 1800000;
         const longitude = (byte1[2] == 1 ? 1 : -1) * parseInt(this.data.substring(30, 38), 16) / 1800000;
