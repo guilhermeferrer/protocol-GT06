@@ -9,6 +9,7 @@ import routes from './src/routes';
 import createTree from 'functional-red-black-tree';
 import Store from './src/app/lib/store';
 import amqp from 'amqplib/callback_api';
+import logger from './src/app/lib/logger';
 
 const clients = new Store(createTree());
 
@@ -22,7 +23,7 @@ amqp.connect('amqp://localhost:5672', (error, conn) => {
     if (error) console.log(error);
     conn.createChannel((error, ch) => {
         if (error) console.log(error);
-        
+
         server.on('connection', (client) => {
             const adapter = new GT06(client, ch);
             client.on('data', (data) => {
@@ -32,8 +33,10 @@ amqp.connect('amqp://localhost:5672', (error, conn) => {
                 }
             });
             client.on('close', (data) => {
-                clients.remove(adapter.getImei());
-                console.log('disconnected');
+                if(adapter.getImei()){
+                    logger.log('info', JSON.stringify({ imei: adapter.getImei(), type: 'disconnected' }));
+                    clients.remove(adapter.getImei());
+                }
             });
         });
 

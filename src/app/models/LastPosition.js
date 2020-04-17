@@ -37,8 +37,8 @@ const LastPosition = new Schema({
         required: true
     },
     events_config: {
-        type: JSON,
-        default: {}
+        type: Schema.Types.ObjectId,
+        ref: 'event-config'
     }
 }, {
     timestamps: true

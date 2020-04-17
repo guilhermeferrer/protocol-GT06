@@ -1,6 +1,10 @@
 import { model, Schema } from 'mongoose';
 
 const Command = new Schema({
+    _id: {
+        type: String,
+        required: true
+    },
     imei: {
         type: String,
         required: true

@@ -21,9 +21,9 @@ class CommandController {
         });
 
         if (command === 'cut') {
-            return res.json({ message: client.cutOilAndElectricity(id) });
+            return res.json({ message: client.cutOilAndElectricity(_id) });
         } else if (command === 'restore') {
-            return res.json({ message: client.restoreOilAndElectricity(id) });
+            return res.json({ message: client.restoreOilAndElectricity(_id) });
         }
 
         return res.status(400).json({ error: "Comando inválido!" });

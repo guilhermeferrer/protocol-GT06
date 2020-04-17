@@ -4,6 +4,8 @@ import Event from '../models/Event';
 import LastPosition from '../models/LastPosition';
 import Position from '../models/Position';
 import amqp from 'amqplib/callback_api';
+import Redis from 'ioredis';
+import logger from './logger';
 
 class Events {
     async setPosition(position) {
@@ -13,16 +15,19 @@ class Events {
         this.velocity = velocity;
         this.ignition = ignition;
         this.coords = [longitude, latitude];
+        this.logs = '';
     }
 
     async setLastPosition() {
-        const lastPosition = await LastPosition.findOne({ imei: this.imei });
+        const lastPosition = await LastPosition.findOne({ imei: this.imei }).populate('event-config');
 
-        if (!lastPosition) return false;
+        if (!lastPosition)
+            return this.addLog(400);//Ultima posição não encontrada
 
         const { velocity, ignition, longitude, latitude, events_config } = lastPosition;
 
-        if (Object.keys(events_config).length === 0) return false;
+        if (!events_config || Object.keys(events_config).length === 0)
+            return this.addLog(401);//Nenhum evento configurado
 
         this.lastVelocity = velocity;
         this.lastIgnition = ignition;
@@ -37,7 +42,13 @@ class Events {
         await this.checkEvents();
 
         await Position(this.imei).create(position);
-        await LastPosition.updateOne({ imei: this.imei }, position);
+        const lastPosition = await LastPosition.updateOne({ imei: this.imei }, position);
+        if (lastPosition.nModified === 0)
+            LastPosition.create(position);
+        const redis = new Redis();
+        redis.set(this.imei, JSON.stringify({ date: position.gps_date, ignition: this.ignition }));
+
+        this.sendLogs();
     }
 
     async checkEvents() {
@@ -45,7 +56,7 @@ class Events {
 
         const { siege, ignition, velocity, ignitionAndVelocity, siegeAndVelocity, points, pointsAndTime, anchor, theft } = this.eventsConfig;
 
-        console.log("\nsiege______");
+        this.addLog(100);
         if (await this.validateConfig(siege, 'siege') &&
             await this.checkSiege(siege))
             await Event.create({
@@ -53,7 +64,7 @@ class Events {
                 type: "siege"
             });
 
-        console.log("\nignition______");
+        this.addLog(101);
         if (await this.validateConfig(ignition, 'ignition') &&
             await this.checkIgnition(ignition))
             await Event.create({
@@ -61,7 +72,7 @@ class Events {
                 type: "ignition"
             });
 
-        console.log("\nvelocity______");
+        this.addLog(102);
         if (await this.validateConfig(velocity, 'velocity') &&
             await this.checkVelocity(velocity))
             await Event.create({
@@ -69,7 +80,7 @@ class Events {
                 type: "velocity"
             });
 
-        console.log("\nignitionAndVelocity______");
+        this.addLog(103);
         if (await this.validateConfig(ignitionAndVelocity, 'ignitionAndVelocity') &&
             await this.checkVelocity(ignitionAndVelocity) &&
             await this.checkIgnition(ignitionAndVelocity))
@@ -78,7 +89,7 @@ class Events {
                 type: "ignitionAndVelocity"
             });
 
-        console.log("\nsiegeAndVelocity");
+        this.addLog(104);
         if (await this.validateConfig(siegeAndVelocity, 'siegeAndVelocity') &&
             await this.checkVelocity(siegeAndVelocity) &&
             await this.checkSiege(siegeAndVelocity))
@@ -87,7 +98,7 @@ class Events {
                 type: "siegeAndVelocity"
             });
 
-        console.log("\npoints");
+        this.addLog(105);
         if (await this.validateConfig(points, 'points') &&
             await this.checkPoints(points))
             await Event.create({
@@ -95,18 +106,18 @@ class Events {
                 type: "points"
             });
 
-        console.log("\npointsAndTime");
+        this.addLog(106);
         if (await this.validateConfig(pointsAndTime, 'pointsAndTime') &&
             await this.checkPoints(pointsAndTime)) {
             amqp.connect('amqp://localhost:5672', (error, conn) => {
-                if (error) console.log(error);
+                if (error) this.addLog(error);
                 conn.createChannel((error, ch) => {
-                    if (error) console.log(error);
+                    if (error) this.addLog(error);
 
                     ch.publish('delay-exchange', '',
                         Buffer.from(JSON.stringify({ imei: this.imei, checkPoint: this.checkPoint })), { headers: { 'x-delay': pointsAndTime.time.toString() } }
                     );
-                    console.log(`Time ativado para ${pointsAndTime.time}ms`);
+                    this.addLog(`Time ativado para ${pointsAndTime.time}ms`);
                 });
             });
         }
@@ -116,10 +127,8 @@ class Events {
     }
 
     async validateConfig(config, type) {
-        if (!config) {
-            console.log(`${type} não configurado`);
-            return false;
-        };
+        if (!config)
+            return this.addLog(402);//Não configurado
 
         const isValid = await this.defaultConfigs(type, config);
 
@@ -136,18 +145,16 @@ class Events {
         const isLastPositionInside = isPointWithinRadius(this.lastCoords, this.checkPoint, radius);
 
         if (isInside) {
-            console.log("Dentro do raio!");
-            if (!_in) return console.log("_in desativado!");
-            if (!continuous && isLastPositionInside) return console.log("1x tipo habilitado e já estava dentro do raio");
+            if (!_in) return this.addLog(409);//_in desativado!
+            if (!continuous && isLastPositionInside)
+                return this.addLog(411);//1x ativo e ultima posição dentro do raio
 
-            console.log("Points ok");
             return true;
         } else {
-            console.log("Fora do raio!");
-            if (!_out) return console.log("_out desativado!");
-            if (!continuous && !isLastPositionInside) return console.log("1x tipo habilitado e já estava fora do raio");
+            if (!_out) return this.addLog(410)//_out desativado!
+            if (!continuous && !isLastPositionInside)
+                return this.addLog(411);//1x ativo e ultima posição fora do raio
 
-            console.log("Points ok");
             return true;
         }
     }
@@ -166,39 +173,35 @@ class Events {
         const isInside = isPointWithinRadius(coords, checkPoint, radius);
 
         if (isInside) {
-            if (!_in) return;
+            if (!_in) return this.addLog(409);//_in dasativado
 
             await Event.create({
                 imei,
                 type: "pointsAndTime"
             });
-            console.log("pointsAndTime criado");
             return;
         }
-        if (!_out) return;
+
+        if (!_out) return this.addLog(410);//_out dasativado
 
         await Event.create({
             imei,
             type: "pointsAndTime"
         });
-        console.log("pointsAndTime criado");
     }
 
     async checkVelocity(config) {
         const { velocity, operator, continuous } = config;
 
         if (operator === "greaterOrEq" && this.velocity >= velocity) {
-            console.log("greaterOrEq");
-            if (!continuous && this.lastVelocity > velocity) return console.log("1x tipo habilitado e ultima velocidade maior ou igual a estipulada");
+            if (!continuous && this.lastVelocity >= velocity)
+                return this.addLog(411);//1x ativo e ultima velocidade maior ou igual a estipulada
 
-            console.log("Velocity ok");
             return true;
         } else if (operator === "lessThan" && this.velocity < velocity) {
-            console.log("lessThan");
+            if (!continuous && this.lastVelocity < velocity)
+                return this.addLog(411);//1x ativo e ultima velocidade menor que a estipulada
 
-            if (!continuous && this.lastVelocity < velocity) return console.log("1x tipo habilitado e ultima velocidade menor que a estipulada");
-
-            console.log("Velocity ok");
             return true;
         }
     }
@@ -207,14 +210,14 @@ class Events {
         const { on, off, continuous } = config;
 
         if (this.ignition) {
-            if (!on) return false;
-            if (!continuous && this.lastIgnition) return false;
+            if (!on) return this.addLog(412);//on desativado
+            if (!continuous && this.lastIgnition) return this.addLog(411);//1x tipo ativo e ignição ativada
 
             return true;
         }
 
-        if (!off) return false;
-        if (!continuous && !this.lastIgnition) return false;
+        if (!off) return this.addLog(413);//off desativado
+        if (!continuous && !this.lastIgnition) return this.addLog(411);//1x tipo ativo e ignição desativada
 
         return true;
     }
@@ -226,19 +229,14 @@ class Events {
         let currentSiege = isPointInPolygon(this.coords, siege);
 
         if (currentSiege) {
-            console.log("Veículo dentro da cerca");
-            if (!_in) return console.log("_in desabilitado");
-            if (!continuous && lastSiege) return console.log("1x tipo desabilitado ou Veículo dentro da cerca");
+            if (!_in) return this.addLog(409);
+            if (!continuous && lastSiege) return this.addLog(411);//1x ativo e veiculo dentro da cerca
 
-            console.log("Siege ok");
             return true;
-
         }
-        console.log("Veículo fora da cerca");
-        if (!_out) return console.log("_out desabilitado");
-        if (!continuous && !lastSiege) return console.log("1x tipo desabilitado ou Veículo fora da cerca");
+        if (!_out) return this.addLog(410);
+        if (!continuous && !lastSiege) return this.addLog(411);//1x ativo e veiculo fora da cerca
 
-        console.log("Siege ok");
         return true;
     }
 
@@ -246,18 +244,13 @@ class Events {
         const { active, initial_date, final_date, initial_time, final_time, suspend_till, schedule, once_a_day } = config;
         const today = new Date();
 
-        if (!active) {
-            console.log("Evento desativado!");
-            return false;
-        }
+        if (!active)
+            return this.addLog(403);//Evento desativado
 
         if (!isWithinInterval(today, {
             start: parseISO(initial_date),
             end: parseISO(final_date)
-        })) {
-            console.log("Evento vencido!");
-            return false;
-        }
+        })) return this.addLog(404);//Evento vencido
 
         const setTime = (time) => {
             const [hours, minutes] = time.split(":");
@@ -275,20 +268,12 @@ class Events {
                 start: setTime(initial_time),
                 end: setTime(final_time)
             }
-        )) {
-            console.log("Evento fora do horário de funcionamento!");
-            return false;
-        }
+        )) return this.addLog(405);//Evento fora do horário de funcionamento
 
-        if (suspend_till && isAfter(parseISO(suspend_till), today)) {
-            console.log("Evento suspenso!");
-            return false;
-        }
+        if (suspend_till && isAfter(parseISO(suspend_till), today))
+            return this.addLog(406);//Evento suspenso
 
-        if (schedule && !schedule.includes(format(new Date(), 'iiii'))) {
-            console.log("Dia de funcionamento inválido!");
-            return false;
-        }
+        if (schedule && !schedule.includes(format(new Date(), 'iiii'))) return this.addLog(407);//Dia inválido
 
         if (once_a_day) {
             const start = new Date();
@@ -298,19 +283,17 @@ class Events {
             end.setHours(23, 59, 59, 999);
             const event = await Event.findOne({ imei: this.imei, type, createdAt: { $gte: start, $lt: end } });
 
-            if (event) {
-                console.log("Evento do dia já foi gerado");
-                return false;
-            };
+            if (event) return this.addLog(408);//Evento do dia já foi gerado
         }
 
         return true;
     }
 
     async checkAnchor(config, radius = 20) {
-        if (!config || !config.active) return false;
+        this.addLog(107);
+        if (!config || !config.active) return this.addLog(403);
 
-        if (!isPointWithinRadius(this.coords, config.point, 20))
+        if (!isPointWithinRadius(this.coords, config.point, radius))
             await Event.create({
                 imei: this.imei,
                 type: "anchor"
@@ -318,7 +301,8 @@ class Events {
     }
 
     async checkTheft(config) {
-        if (!config || !config.active) return false;
+        this.addLog(108);
+        if (!config || !config.active) return this.addLog(403);//Furto e roubo desativado
 
         await Event.create({
             imei: this.imei,
@@ -331,22 +315,38 @@ class Events {
     }
 
     async batteryFailure() {
+        this.addLog(109);
         const { events_config } = await LastPosition.findOne({ imei });
 
         const { battery } = events_config;
 
-        if (!battery) return console.log("Falha de bateria não configurada");
+        if (!battery) {
+            this.addLog(402);
+            return this.sendLogs();
+        };
 
         const isValid = await this.defaultConfigs('battery', battery);
 
-        if (!isValid) return;
+        if (!isValid) return this.sendLogs();
 
         await Event.create({
             imei: this.imei,
             type: "battery"
         });
+        this.sendLogs();
+    }
 
-        console.log("Evento gerado");
+    addLog(log) {
+        this.logs += this.logs ? `,${log}` : log;
+    }
+
+    sendLogs() {
+        const logs = { imei: this.imei, logs: this.logs };
+        amqp.connect('amqp://localhost:5672', (error, conn) => {
+            conn.createChannel((error, ch) => {
+                ch.sendToQueue('event-log', Buffer.from(JSON.stringify(logs)));
+            });
+        });
     }
 }
 
