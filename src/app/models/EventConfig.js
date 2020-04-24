@@ -3,6 +3,7 @@ import { model, Schema } from 'mongoose';
 const EventConfig = new Schema({
     entity: {
         type: String,
+        unique: true
     },
     organization: {
         type: String,

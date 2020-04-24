@@ -6,7 +6,6 @@ mongoose.connect('mongodb://localhost:27017/gateway', {
     useCreateIndex: true, useNewUrlParser: true, useUnifiedTopology: true
 });
 
-
 amqp.connect('amqp://localhost:5672', (error, conn) => {
     if (error) console.log(error);
     conn.createChannel((error, ch) => {

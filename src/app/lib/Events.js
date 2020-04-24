@@ -2,10 +2,10 @@ import { isPointInPolygon, isPointWithinRadius, findNearest } from 'geolib';
 import { format, isAfter, isWithinInterval, parseISO } from 'date-fns';
 import Event from '../models/Event';
 import LastPosition from '../models/LastPosition';
+import EventConfig from '../models/EventConfig';
 import Position from '../models/Position';
 import amqp from 'amqplib/callback_api';
 import Redis from 'ioredis';
-import logger from './logger';
 
 class Events {
     async setPosition(position) {
@@ -19,20 +19,25 @@ class Events {
     }
 
     async setLastPosition() {
-        const lastPosition = await LastPosition.findOne({ imei: this.imei }).populate('event-config');
+        const lastPosition = await LastPosition.findOne({ imei: this.imei }).populate('events_config');
 
         if (!lastPosition)
             return this.addLog(400);//Ultima posição não encontrada
 
         const { velocity, ignition, longitude, latitude, events_config } = lastPosition;
 
-        if (!events_config || Object.keys(events_config).length === 0)
+        if (!events_config)
             return this.addLog(401);//Nenhum evento configurado
+        if (!events_config.events_config)
+            return this.addLog(401);
+        if (Object.keys(events_config.events_config).length === 0)
+            return this.addLog(401);
 
         this.lastVelocity = velocity;
         this.lastIgnition = ignition;
         this.lastCoords = [longitude, latitude];
-        this.eventsConfig = events_config;
+        this.eventsConfig = events_config.events_config;
+        this.configId = events_config._id;
 
         return true;
     }
@@ -291,7 +296,7 @@ class Events {
 
     async checkAnchor(config, radius = 20) {
         this.addLog(107);
-        if (!config || !config.active) return this.addLog(403);
+        if (!config || !config.active) return !config ? this.addLog(402) : this.addLog(403);
 
         if (!isPointWithinRadius(this.coords, config.point, radius))
             await Event.create({
@@ -302,7 +307,7 @@ class Events {
 
     async checkTheft(config) {
         this.addLog(108);
-        if (!config || !config.active) return this.addLog(403);//Furto e roubo desativado
+        if (!config || !config.active) return !config ? this.addLog(402) : this.addLog(403);//Furto e roubo desativado
 
         await Event.create({
             imei: this.imei,
@@ -311,14 +316,24 @@ class Events {
 
         const configs = { ...this.eventsConfig, theft: { active: false } };
 
-        await LastPosition.updateOne({ imei: this.imei }, { events_config: configs });
+        await EventConfig.updateOne({ _id: this.configId }, { events_config: configs });
     }
 
-    async batteryFailure() {
+    async batteryFailure(imei) {
+        this.logs = "";
+        this.imei = imei;
         this.addLog(109);
-        const { events_config } = await LastPosition.findOne({ imei });
+        const { events_config } = await LastPosition.findOne({ imei }).populate('events_config');
 
-        const { battery } = events_config;
+        if (!events_config) {
+            this.addLog(402);
+            return this.sendLogs();
+        };
+        if (!events_config.events_config) {
+            this.addLog(402);
+            return this.sendLogs();
+        };
+        const { battery } = events_config.events_config;
 
         if (!battery) {
             this.addLog(402);
@@ -333,6 +348,7 @@ class Events {
             imei: this.imei,
             type: "battery"
         });
+        console.log(this.logs);
         this.sendLogs();
     }
 
@@ -341,7 +357,7 @@ class Events {
     }
 
     sendLogs() {
-        const logs = { imei: this.imei, logs: this.logs };
+        const logs = { imei: this.imei, logs: this.logs, receivedAt: new Date() };
         amqp.connect('amqp://localhost:5672', (error, conn) => {
             conn.createChannel((error, ch) => {
                 ch.sendToQueue('event-log', Buffer.from(JSON.stringify(logs)));

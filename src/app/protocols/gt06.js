@@ -70,10 +70,10 @@ export default class GT06 {
             if (!data)
                 return this.queue.sendToQueue('positions', Buffer.from(JSON.stringify(position)));
 
-            const { date, ignition } = JSON.parse(data);
+            const { date } = JSON.parse(data);
             const lastInsert = differenceInMinutes(position.gps_date, parseISO(date));
 
-            if ((ignition && lastInsert >= 1) || (!ignition && lastInsert >= 30))
+            if ((this.ignition && lastInsert >= 1) || (!this.ignition && lastInsert >= 30))
                 return this.queue.sendToQueue('positions', Buffer.from(JSON.stringify(position)));
 
             logger.log('info', JSON.stringify({ imei: this.imei, type: 'redis', data: `${format(position.gps_date, "HH:mm:ss")} - ${format(parseISO(date), "HH:mm:ss")}` }));
