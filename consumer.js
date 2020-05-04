@@ -3,7 +3,9 @@ import Events from './src/app/lib/Events';
 import mongoose from 'mongoose';
 
 mongoose.connect('mongodb://localhost:27017/gateway', {
-    useCreateIndex: true, useNewUrlParser: true, useUnifiedTopology: true
+    useCreateIndex: true,
+    useNewUrlParser: true,
+    useUnifiedTopology: true
 });
 
 amqp.connect('amqp://localhost:5672', (error, conn) => {
@@ -15,7 +17,7 @@ amqp.connect('amqp://localhost:5672', (error, conn) => {
             Events.storePosition(JSON.parse(msg.content));
         }, { noAck: true });
 
-        ch.consume('point-and-time', msg => {
+        ch.consume('points-and-time', msg => {
             Events.checkPointsAndTime(JSON.parse(msg.content));
         }, { noAck: true });
     });

@@ -1,7 +1,7 @@
 import { hexToDecimal, bufferToHexString, decimalToHex, toBuffer, crc, utf8ToHex, hexToBinary, hexToUtf8 } from '../lib/functions';
 import Command from '../models/Command';
-import Redis from 'ioredis';
 import { differenceInMinutes, parseISO, format } from 'date-fns';
+import redis from '../../database/redis';
 
 import logger from '../lib/logger';
 import Events from '../lib/Events';
@@ -64,8 +64,6 @@ export default class GT06 {
 
         if (this.ignition === undefined || this.electricity === undefined) return;
 
-        const redis = new Redis();
-
         redis.get(this.imei).then(data => {
             if (!data)
                 return this.queue.sendToQueue('positions', Buffer.from(JSON.stringify(position)));
@@ -96,8 +94,8 @@ export default class GT06 {
         return this.client.write(this.createResponsePackage(content));
     }
 
-    cutOilAndElectricity(identifier) {        
-        const content = [0x15, 0x80, 0x0f, ...toBuffer(identifier), ...this.DYD, 0x00, ...this.getSerialNumber()];   
+    cutOilAndElectricity(identifier) {
+        const content = [0x15, 0x80, 0x0f, ...toBuffer(identifier), ...this.DYD, 0x00, ...this.getSerialNumber()];
         const command = this.createResponsePackage(content);
         logger.log('info', JSON.stringify({ imei: this.imei, type: 'cutOilAndElectricity', data: command.toString('hex') }));
         this.client.write(command);
@@ -119,10 +117,7 @@ export default class GT06 {
         const status = hexToUtf8(this.data.substring(18, this.data.length - 16));
         const _id = this.data.substr(10, 8);
 
-        await Command.updateOne(
-            { _id },
-            { status },
-        );
+        await Command.updateOne({ _id }, { status }, );
     }
 
     getSerialNumber() {

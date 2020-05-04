@@ -5,7 +5,7 @@ import LastPosition from '../models/LastPosition';
 import EventConfig from '../models/EventConfig';
 import Position from '../models/Position';
 import amqp from 'amqplib/callback_api';
-import Redis from 'ioredis';
+import redis from '../../database/redis';
 
 class Events {
     async setPosition(position) {
@@ -22,12 +22,12 @@ class Events {
         const lastPosition = await LastPosition.findOne({ imei: this.imei }).populate('events_config');
 
         if (!lastPosition)
-            return this.addLog(400);//Ultima posição não encontrada
+            return this.addLog(400); //Ultima posição não encontrada
 
         const { velocity, ignition, longitude, latitude, events_config } = lastPosition;
 
         if (!events_config)
-            return this.addLog(401);//Nenhum evento configurado
+            return this.addLog(401); //Nenhum evento configurado
         if (!events_config.events_config)
             return this.addLog(401);
         if (Object.keys(events_config.events_config).length === 0)
@@ -50,7 +50,6 @@ class Events {
         const lastPosition = await LastPosition.updateOne({ imei: this.imei }, position);
         if (lastPosition.nModified === 0)
             LastPosition.create(position);
-        const redis = new Redis();
         redis.set(this.imei, JSON.stringify({ date: position.gps_date, ignition: this.ignition }));
 
         this.sendLogs();
@@ -133,7 +132,7 @@ class Events {
 
     async validateConfig(config, type) {
         if (!config)
-            return this.addLog(402);//Não configurado
+            return this.addLog(402); //Não configurado
 
         const isValid = await this.defaultConfigs(type, config);
 
@@ -150,15 +149,15 @@ class Events {
         const isLastPositionInside = isPointWithinRadius(this.lastCoords, this.checkPoint, radius);
 
         if (isInside) {
-            if (!_in) return this.addLog(409);//_in desativado!
+            if (!_in) return this.addLog(409); //_in desativado!
             if (!continuous && isLastPositionInside)
-                return this.addLog(411);//1x ativo e ultima posição dentro do raio
+                return this.addLog(411); //1x ativo e ultima posição dentro do raio
 
             return true;
         } else {
-            if (!_out) return this.addLog(410)//_out desativado!
+            if (!_out) return this.addLog(410) //_out desativado!
             if (!continuous && !isLastPositionInside)
-                return this.addLog(411);//1x ativo e ultima posição fora do raio
+                return this.addLog(411); //1x ativo e ultima posição fora do raio
 
             return true;
         }
@@ -178,7 +177,7 @@ class Events {
         const isInside = isPointWithinRadius(coords, checkPoint, radius);
 
         if (isInside) {
-            if (!_in) return this.addLog(409);//_in dasativado
+            if (!_in) return this.addLog(409); //_in dasativado
 
             await Event.create({
                 imei,
@@ -187,7 +186,7 @@ class Events {
             return;
         }
 
-        if (!_out) return this.addLog(410);//_out dasativado
+        if (!_out) return this.addLog(410); //_out dasativado
 
         await Event.create({
             imei,
@@ -200,12 +199,12 @@ class Events {
 
         if (operator === "greaterOrEq" && this.velocity >= velocity) {
             if (!continuous && this.lastVelocity >= velocity)
-                return this.addLog(411);//1x ativo e ultima velocidade maior ou igual a estipulada
+                return this.addLog(411); //1x ativo e ultima velocidade maior ou igual a estipulada
 
             return true;
         } else if (operator === "lessThan" && this.velocity < velocity) {
             if (!continuous && this.lastVelocity < velocity)
-                return this.addLog(411);//1x ativo e ultima velocidade menor que a estipulada
+                return this.addLog(411); //1x ativo e ultima velocidade menor que a estipulada
 
             return true;
         }
@@ -215,14 +214,14 @@ class Events {
         const { on, off, continuous } = config;
 
         if (this.ignition) {
-            if (!on) return this.addLog(412);//on desativado
-            if (!continuous && this.lastIgnition) return this.addLog(411);//1x tipo ativo e ignição ativada
+            if (!on) return this.addLog(412); //on desativado
+            if (!continuous && this.lastIgnition) return this.addLog(411); //1x tipo ativo e ignição ativada
 
             return true;
         }
 
-        if (!off) return this.addLog(413);//off desativado
-        if (!continuous && !this.lastIgnition) return this.addLog(411);//1x tipo ativo e ignição desativada
+        if (!off) return this.addLog(413); //off desativado
+        if (!continuous && !this.lastIgnition) return this.addLog(411); //1x tipo ativo e ignição desativada
 
         return true;
     }
@@ -235,12 +234,12 @@ class Events {
 
         if (currentSiege) {
             if (!_in) return this.addLog(409);
-            if (!continuous && lastSiege) return this.addLog(411);//1x ativo e veiculo dentro da cerca
+            if (!continuous && lastSiege) return this.addLog(411); //1x ativo e veiculo dentro da cerca
 
             return true;
         }
         if (!_out) return this.addLog(410);
-        if (!continuous && !lastSiege) return this.addLog(411);//1x ativo e veiculo fora da cerca
+        if (!continuous && !lastSiege) return this.addLog(411); //1x ativo e veiculo fora da cerca
 
         return true;
     }
@@ -250,12 +249,12 @@ class Events {
         const today = new Date();
 
         if (!active)
-            return this.addLog(403);//Evento desativado
+            return this.addLog(403); //Evento desativado
 
         if (!isWithinInterval(today, {
-            start: parseISO(initial_date),
-            end: parseISO(final_date)
-        })) return this.addLog(404);//Evento vencido
+                start: parseISO(initial_date),
+                end: parseISO(final_date)
+            })) return this.addLog(404); //Evento vencido
 
         const setTime = (time) => {
             const [hours, minutes] = time.split(":");
@@ -268,17 +267,16 @@ class Events {
         };
 
         if (!isWithinInterval(
-            today,
-            {
-                start: setTime(initial_time),
-                end: setTime(final_time)
-            }
-        )) return this.addLog(405);//Evento fora do horário de funcionamento
+                today, {
+                    start: setTime(initial_time),
+                    end: setTime(final_time)
+                }
+            )) return this.addLog(405); //Evento fora do horário de funcionamento
 
         if (suspend_till && isAfter(parseISO(suspend_till), today))
-            return this.addLog(406);//Evento suspenso
+            return this.addLog(406); //Evento suspenso
 
-        if (schedule && !schedule.includes(format(new Date(), 'iiii'))) return this.addLog(407);//Dia inválido
+        if (schedule && !schedule.includes(format(new Date(), 'iiii'))) return this.addLog(407); //Dia inválido
 
         if (once_a_day) {
             const start = new Date();
@@ -288,7 +286,7 @@ class Events {
             end.setHours(23, 59, 59, 999);
             const event = await Event.findOne({ imei: this.imei, type, createdAt: { $gte: start, $lt: end } });
 
-            if (event) return this.addLog(408);//Evento do dia já foi gerado
+            if (event) return this.addLog(408); //Evento do dia já foi gerado
         }
 
         return true;
@@ -307,14 +305,14 @@ class Events {
 
     async checkTheft(config) {
         this.addLog(108);
-        if (!config || !config.active) return !config ? this.addLog(402) : this.addLog(403);//Furto e roubo desativado
+        if (!config || !config.active) return !config ? this.addLog(402) : this.addLog(403); //Furto e roubo desativado
 
         await Event.create({
             imei: this.imei,
             type: "theft"
         });
 
-        const configs = { ...this.eventsConfig, theft: { active: false } };
+        const configs = {...this.eventsConfig, theft: { active: false } };
 
         await EventConfig.updateOne({ _id: this.configId }, { events_config: configs });
     }

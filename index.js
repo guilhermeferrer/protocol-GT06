@@ -19,7 +19,9 @@ api.use(express.json());
 api.use(cors());
 api.use(routes(clients));
 
-amqp.connect('amqp://localhost:5672', (error, conn) => {
+const { HOST, RABBITMQ_PORT, GT06_PORT, API_PORT } = process.env;
+
+amqp.connect(`amqp://${HOST}:${RABBITMQ_PORT}`, (error, conn) => {
     if (error) console.log(error);
     conn.createChannel((error, ch) => {
         if (error) console.log(error);
@@ -33,7 +35,7 @@ amqp.connect('amqp://localhost:5672', (error, conn) => {
                 }
             });
             client.on('close', (data) => {
-                if(adapter.getImei()){
+                if (adapter.getImei()) {
                     logger.log('info', JSON.stringify({ imei: adapter.getImei(), type: 'disconnected' }));
                     clients.remove(adapter.getImei());
                 }
@@ -45,5 +47,5 @@ amqp.connect('amqp://localhost:5672', (error, conn) => {
 
 
 
-api.listen(8081);
-server.listen(3333);
+api.listen(API_PORT);
+server.listen(GT06_PORT);
