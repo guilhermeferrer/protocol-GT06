@@ -44,7 +44,7 @@ export default class GT06 {
     }
 
     sendProtocolLog(msg) {
-        this.queue.sendToQueue('protocol-log', Buffer.from(JSON.stringify(msg)));
+        this.queue.sendToQueue('protocol-log', Buffer.from(JSON.stringify({...msg, receivedAt: new Date() })));
     }
 
     async loginRequest() {
