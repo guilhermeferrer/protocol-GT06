@@ -50,7 +50,7 @@ class Events {
         const lastPosition = await LastPosition.updateOne({ imei: this.imei }, position);
         if (lastPosition.nModified === 0)
             LastPosition.create(position);
-        redis.set(this.imei, JSON.stringify({ date: position.gps_date, ignition: this.ignition }));
+        redis.set(this.imei, JSON.stringify({ date: position.gps_date }));
 
         this.sendLogs();
     }

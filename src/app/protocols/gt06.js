@@ -3,7 +3,6 @@ import Command from '../models/Command';
 import { differenceInMinutes, parseISO, format } from 'date-fns';
 import redis from '../../database/redis';
 
-import logger from '../lib/logger';
 import Events from '../lib/Events';
 
 export default class GT06 {
@@ -40,15 +39,20 @@ export default class GT06 {
                 return this.alarm();
             default:
                 if (this.imei)
-                    return logger.log('info', JSON.stringify({ imei: this.imei, type: `unkown protocol`, protocol, data: this.data }));
+                    return this.sendProtocolLog({ imei: this.imei, type: `unkown protocol`, protocol, data: this.data });
         }
+    }
+
+    sendProtocolLog(msg) {
+        this.queue.sendToQueue('protocol-log', Buffer.from(JSON.stringify(msg)));
     }
 
     async loginRequest() {
         this.imei = this.data.substr(9, 15);
         const content = [0x05, 0x01, ...this.getSerialNumber()];
         this.verifyAnchor = new Date();
-        logger.log('info', JSON.stringify({ imei: this.imei, type: 'loginRequest' }));
+
+        this.sendProtocolLog({ imei: this.imei, type: 'loginRequest' });
         return this.client.write(this.createResponsePackage(content));
     }
 
@@ -60,7 +64,7 @@ export default class GT06 {
             ignition: this.ignition,
             electricity: this.electricity
         };
-        logger.log('info', JSON.stringify({ imei: this.imei, type: 'report', data: this.data }));
+        this.sendProtocolLog({ imei: this.imei, type: 'report', data: this.data });
 
         if (this.ignition === undefined || this.electricity === undefined) return;
 
@@ -74,17 +78,17 @@ export default class GT06 {
             if ((this.ignition && lastInsert >= 1) || (!this.ignition && lastInsert >= 30))
                 return this.queue.sendToQueue('positions', Buffer.from(JSON.stringify(position)));
 
-            logger.log('info', JSON.stringify({ imei: this.imei, type: 'redis', data: `${format(position.gps_date, "HH:mm:ss")} - ${format(parseISO(date), "HH:mm:ss")}` }));
+            this.sendProtocolLog({ imei: this.imei, type: 'redis', data: `${format(position.gps_date, "HH:mm:ss")} - ${format(parseISO(date), "HH:mm:ss")}` });
         });
     }
 
     async alarm() {
-        logger.log('info', JSON.stringify({ imei: this.imei, type: 'alarm' }));
+        this.sendProtocolLog({ imei: this.imei, type: 'alarm' });
         Events.batteryFailure(this.imei);
     }
 
     async heartBeat(protocol) {
-        logger.log('info', JSON.stringify({ imei: this.imei, type: 'heartBeat', data: this.data }));
+        this.sendProtocolLog({ imei: this.imei, type: 'heartBeat', data: this.data });
         protocol = toBuffer(decimalToHex(protocol));
         const content = [0x05, ...protocol, ...this.getSerialNumber()];
         const status = hexToDecimal(this.data.substring(8, 10)).toString(2).padStart(8, '0');
@@ -97,7 +101,7 @@ export default class GT06 {
     cutOilAndElectricity(identifier) {
         const content = [0x15, 0x80, 0x0f, ...toBuffer(identifier), ...this.DYD, 0x00, ...this.getSerialNumber()];
         const command = this.createResponsePackage(content);
-        logger.log('info', JSON.stringify({ imei: this.imei, type: 'cutOilAndElectricity', data: command.toString('hex') }));
+        this.sendProtocolLog({ imei: this.imei, type: 'cutOilAndElectricity', data: command.toString('hex') });
         this.client.write(command);
 
         return "Enviado!";
@@ -106,14 +110,14 @@ export default class GT06 {
     restoreOilAndElectricity(identifier) {
         const content = [0x16, 0x80, 0x10, ...toBuffer(identifier), ...this.HFYD, 0x00, ...this.getSerialNumber()];
         const command = this.createResponsePackage(content);
-        logger.log('info', JSON.stringify({ imei: this.imei, type: 'restoreOilAndElectricity', data: command.toString('hex') }));
+        this.sendProtocolLog({ imei: this.imei, type: 'restoreOilAndElectricity', data: command.toString('hex') });
         this.client.write(command);
 
         return "Enviado!";
     }
 
     async commandResponse() {
-        logger.log('info', JSON.stringify({ imei: this.imei, type: `commandResponse`, data: this.data }));
+        this.sendProtocolLog({ imei: this.imei, type: `commandResponse`, data: this.data });
         const status = hexToUtf8(this.data.substring(18, this.data.length - 16));
         const _id = this.data.substr(10, 8);
 
