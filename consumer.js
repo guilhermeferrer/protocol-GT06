@@ -1,12 +1,6 @@
 const amqp = require('amqplib/callback_api');
 import Events from './src/app/lib/Events';
-import mongoose from 'mongoose';
-
-mongoose.connect('mongodb://localhost:27017/gateway', {
-    useCreateIndex: true,
-    useNewUrlParser: true,
-    useUnifiedTopology: true
-});
+import './src/database/mongoose';
 
 amqp.connect('amqp://localhost:5672', (error, conn) => {
     if (error) console.log(error);
