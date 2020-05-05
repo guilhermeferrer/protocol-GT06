@@ -9,7 +9,6 @@ import routes from './src/routes';
 import createTree from 'functional-red-black-tree';
 import Store from './src/app/lib/store';
 import amqp from 'amqplib/callback_api';
-import logger from './src/app/lib/logger';
 
 const clients = new Store(createTree());
 
@@ -36,7 +35,7 @@ amqp.connect(`amqp://${HOST}:${RABBITMQ_PORT}`, (error, conn) => {
             });
             client.on('close', (data) => {
                 if (adapter.getImei()) {
-                    logger.log('info', JSON.stringify({ imei: adapter.getImei(), type: 'disconnected' }));
+                    adapter.sendProtocolLog({ imei: adapter.getImei(), type: 'disconnected' });
                     clients.remove(adapter.getImei());
                 }
             });
