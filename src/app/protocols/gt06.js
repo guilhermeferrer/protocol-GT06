@@ -1,9 +1,9 @@
 import { hexToDecimal, bufferToHexString, decimalToHex, toBuffer, crc, utf8ToHex, hexToBinary, hexToUtf8 } from '../lib/functions';
-import Command from '../models/Command';
 import { differenceInMinutes, parseISO, format } from 'date-fns';
+
 import redis from '../../database/redis';
 
-import Events from '../lib/Events';
+import Command from '../models/Command';
 
 export default class GT06 {
 
@@ -44,7 +44,7 @@ export default class GT06 {
     }
 
     sendProtocolLog(msg) {
-        this.queue.sendToQueue('protocol-log', Buffer.from(JSON.stringify({...msg, receivedAt: new Date() })));
+        this.queue.sendToQueue('protocol-log', Buffer.from(JSON.stringify({...msg, receivedAt: new Date() })), { persistent: true });
     }
 
     async loginRequest() {
@@ -76,7 +76,7 @@ export default class GT06 {
             const lastInsert = differenceInMinutes(position.gps_date, parseISO(date));
 
             if ((this.ignition && lastInsert >= 1) || (!this.ignition && lastInsert >= 30))
-                return this.queue.sendToQueue('positions', Buffer.from(JSON.stringify(position)));
+                return this.queue.sendToQueue('positions', Buffer.from(JSON.stringify(position)), { persistent: true });
 
             this.sendProtocolLog({ imei: this.imei, type: 'redis', data: `${format(position.gps_date, "HH:mm:ss")} - ${format(parseISO(date), "HH:mm:ss")}` });
         });
@@ -84,7 +84,7 @@ export default class GT06 {
 
     async alarm() {
         this.sendProtocolLog({ imei: this.imei, type: 'alarm' });
-        Events.batteryFailure(this.imei);
+        this.queue.sendToQueue('battery-failure', Buffer.from(JSON.stringify({ imei: this.imei })), { persistent: true });
     }
 
     async heartBeat(protocol) {
