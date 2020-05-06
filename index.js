@@ -18,7 +18,7 @@ api.use(express.json());
 api.use(cors());
 api.use(routes(clients));
 
-const { HOST, RABBITMQ_PORT, GT06_PORT, API_PORT } = process.env;
+const { HOST, RABBITMQ_PORT, GT06_PORT, API_GATEWAY_PORT } = process.env;
 
 amqp.connect(`amqp://${HOST}:${RABBITMQ_PORT}`, (error, conn) => {
     if (error) console.log(error);
@@ -39,6 +39,9 @@ amqp.connect(`amqp://${HOST}:${RABBITMQ_PORT}`, (error, conn) => {
                     clients.remove(adapter.getImei());
                 }
             });
+            client.on('error', (err) => {
+                console.log(err);
+            });
         });
 
     });
@@ -46,5 +49,5 @@ amqp.connect(`amqp://${HOST}:${RABBITMQ_PORT}`, (error, conn) => {
 
 
 
-api.listen(API_PORT);
+api.listen(API_GATEWAY_PORT);
 server.listen(GT06_PORT);
