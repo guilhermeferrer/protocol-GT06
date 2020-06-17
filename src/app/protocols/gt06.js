@@ -44,7 +44,7 @@ export default class GT06 {
     }
 
     sendProtocolLog(msg) {
-        this.queue.sendToQueue('protocol-log', Buffer.from(JSON.stringify({...msg, receivedAt: new Date() })), { persistent: true });
+        this.queue.sendToQueue('protocol-log', Buffer.from(JSON.stringify({ ...msg, receivedAt: new Date() })), { persistent: true });
     }
 
     async loginRequest() {
@@ -72,7 +72,11 @@ export default class GT06 {
             if (!data)
                 return this.queue.sendToQueue('positions', Buffer.from(JSON.stringify(position)));
 
-            const { date } = JSON.parse(data);
+            const { date, active } = JSON.parse(data);
+
+            if (!active)
+                return this.sendProtocolLog({ imei: this.imei, type: 'inactive' });
+
             const lastInsert = differenceInMinutes(position.gps_date, parseISO(date));
 
             if ((this.ignition && lastInsert >= 1) || (!this.ignition && lastInsert >= 30))
@@ -121,7 +125,7 @@ export default class GT06 {
         const status = hexToUtf8(this.data.substring(18, this.data.length - 16));
         const _id = this.data.substr(10, 8);
 
-        await Command.updateOne({ _id }, { status }, );
+        await Command.updateOne({ _id }, { status },);
     }
 
     getSerialNumber() {
