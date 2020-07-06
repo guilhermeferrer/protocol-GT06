@@ -177,7 +177,7 @@ export default class GT06 {
             latitude,
             longitude,
             course,
-            velocity: hexToDecimal(this.data.substr(38, 1))
+            velocity: hexToDecimal(this.data.substr(38, 2))
         }
 
         return gps;
